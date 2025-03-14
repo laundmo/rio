@@ -7,6 +7,7 @@ pub mod kitty_keyboard;
 use crate::crosswords::vi_mode::ViMotion;
 use crate::crosswords::Mode;
 use bitflags::bitflags;
+use rio_backend::config::bindings::BindingAction;
 use rio_backend::config::bindings::KeyBinding as ConfigKeyBinding;
 use rio_backend::config::keyboard::Keyboard as ConfigKeyboard;
 use rio_window::event::MouseButton;
@@ -14,6 +15,7 @@ use rio_window::keyboard::Key::*;
 use rio_window::keyboard::NamedKey::*;
 use rio_window::keyboard::{Key, KeyLocation, ModifiersState, PhysicalKey};
 use std::fmt::Debug;
+use std::ops::Not;
 // use rio_window::platform::scancode::PhysicalKeyExtScancode;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,7 +72,7 @@ pub struct Binding<T> {
     pub mods: ModifiersState,
 
     /// String to send to PTY if mods and mode match.
-    pub action: Action,
+    pub actions: Vec<Action>,
 
     /// Binding mode required to activate binding.
     pub mode: BindingMode,
@@ -213,52 +215,58 @@ impl From<String> for Action {
         let action = action.to_lowercase();
 
         let action_from_string = match action.as_str() {
+            "clearhistory" => Some(Action::ClearHistory),
+            "clearlognotice" => Some(Action::ClearLogNotice),
+            "clearselection" => Some(Action::ClearSelection),
+            "closesplitortab" => Some(Action::CloseCurrentSplitOrTab),
+            "closetab" => Some(Action::TabCloseCurrent),
+            "closeunfocusedtabs" => Some(Action::TabCloseUnfocused),
+            "copy" => Some(Action::Copy),
+            "createtab" => Some(Action::TabCreateNew),
+            "createwindow" => Some(Action::WindowCreateNew),
+            "decreasefontsize" => Some(Action::DecreaseFontSize),
+            "hide" => Some(Action::Hide),
+            "increasefontsize" => Some(Action::IncreaseFontSize),
+            "minimize" => Some(Action::Minimize),
+            "movecurrenttabtonext" => Some(Action::MoveCurrentTabToNext),
+            "movecurrenttabtoprev" => Some(Action::MoveCurrentTabToPrev),
+            "none" => Some(Action::None),
+            "openconfigeditor" => Some(Action::ConfigEditor),
             "paste" => Some(Action::Paste),
             "quit" => Some(Action::Quit),
-            "copy" => Some(Action::Copy),
-            "searchforward" => Some(Action::SearchForward),
+            "receivechar" => Some(Action::ReceiveChar),
+            "resetfontsize" => Some(Action::ResetFontSize),
+            "scrollhalfpagedown" => Some(Action::ScrollHalfPageDown),
+            "scrollhalfpageup" => Some(Action::ScrollHalfPageUp),
+            "scrollpagedown" => Some(Action::ScrollPageDown),
+            "scrollpageup" => Some(Action::ScrollPageUp),
+            "scrolltobottom" => Some(Action::ScrollToBottom),
+            "scrolltotop" => Some(Action::ScrollToTop),
             "searchbackward" => Some(Action::SearchBackward),
-            "searchconfirm" => Some(Action::Search(SearchAction::SearchConfirm)),
             "searchcancel" => Some(Action::Search(SearchAction::SearchCancel)),
             "searchclear" => Some(Action::Search(SearchAction::SearchClear)),
+            "searchconfirm" => Some(Action::Search(SearchAction::SearchConfirm)),
+            "searchdeleteword" => Some(Action::Search(SearchAction::SearchDeleteWord)),
             "searchfocusnext" => Some(Action::Search(SearchAction::SearchFocusNext)),
             "searchfocusprevious" => {
                 Some(Action::Search(SearchAction::SearchFocusPrevious))
             }
-            "searchdeleteword" => Some(Action::Search(SearchAction::SearchDeleteWord)),
+            "searchforward" => Some(Action::SearchForward),
             "searchhistorynext" => Some(Action::Search(SearchAction::SearchHistoryNext)),
             "searchhistoryprevious" => {
                 Some(Action::Search(SearchAction::SearchHistoryPrevious))
             }
-            "clearhistory" => Some(Action::ClearHistory),
-            "resetfontsize" => Some(Action::ResetFontSize),
-            "increasefontsize" => Some(Action::IncreaseFontSize),
-            "decreasefontsize" => Some(Action::DecreaseFontSize),
-            "createwindow" => Some(Action::WindowCreateNew),
-            "createtab" => Some(Action::TabCreateNew),
-            "movecurrenttabtoprev" => Some(Action::MoveCurrentTabToPrev),
-            "movecurrenttabtonext" => Some(Action::MoveCurrentTabToNext),
-            "closetab" => Some(Action::TabCloseCurrent),
-            "closesplitortab" => Some(Action::CloseCurrentSplitOrTab),
-            "closeunfocusedtabs" => Some(Action::TabCloseUnfocused),
-            "openconfigeditor" => Some(Action::ConfigEditor),
-            "selectprevtab" => Some(Action::SelectPrevTab),
-            "selectnexttab" => Some(Action::SelectNextTab),
             "selectlasttab" => Some(Action::SelectLastTab),
-            "receivechar" => Some(Action::ReceiveChar),
-            "scrollhalfpageup" => Some(Action::ScrollHalfPageUp),
-            "scrollhalfpagedown" => Some(Action::ScrollHalfPageDown),
-            "scrolltotop" => Some(Action::ScrollToTop),
-            "scrolltobottom" => Some(Action::ScrollToBottom),
-            "splitright" => Some(Action::SplitRight),
-            "splitdown" => Some(Action::SplitDown),
             "selectnextsplit" => Some(Action::SelectNextSplit),
-            "selectprevsplit" => Some(Action::SelectPrevSplit),
             "selectnextsplitortab" => Some(Action::SelectNextSplitOrTab),
+            "selectnexttab" => Some(Action::SelectNextTab),
+            "selectprevsplit" => Some(Action::SelectPrevSplit),
             "selectprevsplitortab" => Some(Action::SelectPrevSplitOrTab),
-            "togglevimode" => Some(Action::ToggleViMode),
+            "selectprevtab" => Some(Action::SelectPrevTab),
+            "splitdown" => Some(Action::SplitDown),
+            "splitright" => Some(Action::SplitRight),
             "togglefullscreen" => Some(Action::ToggleFullscreen),
-            "none" => Some(Action::None),
+            "togglevimode" => Some(Action::ToggleViMode),
             _ => None,
         };
 
@@ -528,7 +536,7 @@ macro_rules! bindings {
             $(,$mods:expr)*
             $(,+$mode:expr)*
             $(,~$notmode:expr)*
-            ;$action:expr
+            ;$($action:expr),*
         );*
         $(;)*
     ) => {{
@@ -541,13 +549,15 @@ macro_rules! bindings {
             $(_mode.insert($mode);)*
             let mut _notmode = BindingMode::empty();
             $(_notmode.insert($notmode);)*
+            let mut _actions: Vec<Action> = vec![$($action.into()),*];
+
 
             v.push($ty {
                 trigger: trigger!($ty, $key, $($location)?),
                 mods: _mods,
                 mode: _mode,
                 notmode: _notmode,
-                action: $action.into(),
+                actions: _actions,
             });
         )*
 
@@ -606,18 +616,12 @@ pub fn default_key_bindings(
         Key::Named(End),      ModifiersState::SHIFT, ~BindingMode::ALT_SCREEN; Action::ScrollToBottom;
         Key::Named(PageUp),   ModifiersState::SHIFT, ~BindingMode::ALT_SCREEN; Action::ScrollPageUp;
         Key::Named(PageDown), ModifiersState::SHIFT, ~BindingMode::ALT_SCREEN; Action::ScrollPageDown;
-        Key::Named(Home),  +BindingMode::APP_CURSOR, ~BindingMode::VI;
-            Action::Esc("\x1bOH".into());
-        Key::Named(End),   +BindingMode::APP_CURSOR, ~BindingMode::VI;
-            Action::Esc("\x1bOF".into());
-        Key::Named(ArrowUp),    +BindingMode::APP_CURSOR, ~BindingMode::VI;
-            Action::Esc("\x1bOA".into());
-        Key::Named(ArrowDown),  +BindingMode::APP_CURSOR, ~BindingMode::VI;
-            Action::Esc("\x1bOB".into());
-        Key::Named(ArrowRight), +BindingMode::APP_CURSOR, ~BindingMode::VI;
-            Action::Esc("\x1bOC".into());
-        Key::Named(ArrowLeft),  +BindingMode::APP_CURSOR, ~BindingMode::VI;
-            Action::Esc("\x1bOD".into());
+        Key::Named(Home),  +BindingMode::APP_CURSOR, ~BindingMode::VI; Action::Esc("\x1bOH".into());
+        Key::Named(End),   +BindingMode::APP_CURSOR, ~BindingMode::VI; Action::Esc("\x1bOF".into());
+        Key::Named(ArrowUp),    +BindingMode::APP_CURSOR, ~BindingMode::VI; Action::Esc("\x1bOA".into());
+        Key::Named(ArrowDown),  +BindingMode::APP_CURSOR, ~BindingMode::VI; Action::Esc("\x1bOB".into());
+        Key::Named(ArrowRight), +BindingMode::APP_CURSOR, ~BindingMode::VI; Action::Esc("\x1bOC".into());
+        Key::Named(ArrowLeft),  +BindingMode::APP_CURSOR, ~BindingMode::VI; Action::Esc("\x1bOD".into());
 
         // VI Mode
         Key::Named(Space), ModifiersState::ALT | ModifiersState::SHIFT; Action::ToggleViMode;
@@ -659,32 +663,19 @@ pub fn default_key_bindings(
         Key::Named(ArrowDown), ModifiersState::SUPER, ~BindingMode::VI; Action::None;
         Key::Named(ArrowLeft), ModifiersState::SUPER, ~BindingMode::VI; Action::None;
         Key::Named(ArrowRight), ModifiersState::SUPER, ~BindingMode::VI; Action::None;
-        "0",                          +BindingMode::VI, ~BindingMode::SEARCH;
-            ViMotion::First;
-        "4",   ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH;
-            ViMotion::Last;
-        "6",   ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH;
-            ViMotion::FirstOccupied;
-        "h",      ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH;
-            ViMotion::High;
-        "m",      ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH;
-            ViMotion::Middle;
-        "l",      ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH;
-            ViMotion::Low;
-        "b",                             +BindingMode::VI, ~BindingMode::SEARCH;
-            ViMotion::SemanticLeft;
-        "w",                             +BindingMode::VI, ~BindingMode::SEARCH;
-            ViMotion::SemanticRight;
-        "e",                             +BindingMode::VI, ~BindingMode::SEARCH;
-            ViMotion::SemanticRightEnd;
-        "b",      ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH;
-            ViMotion::WordLeft;
-        "w",      ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH;
-            ViMotion::WordRight;
-        "e",      ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH;
-            ViMotion::WordRightEnd;
-        "5",   ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH;
-            ViMotion::Bracket;
+        "0", +BindingMode::VI, ~BindingMode::SEARCH; ViMotion::First;
+        "4", ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH; ViMotion::Last;
+        "6", ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH; ViMotion::FirstOccupied;
+        "h", ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH; ViMotion::High;
+        "m", ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH; ViMotion::Middle;
+        "l", ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH; ViMotion::Low;
+        "b", +BindingMode::VI, ~BindingMode::SEARCH; ViMotion::SemanticLeft;
+        "w", +BindingMode::VI, ~BindingMode::SEARCH; ViMotion::SemanticRight;
+        "e", +BindingMode::VI, ~BindingMode::SEARCH; ViMotion::SemanticRightEnd;
+        "b", ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH; ViMotion::WordLeft;
+        "w", ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH; ViMotion::WordRight;
+        "e", ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH; ViMotion::WordRightEnd;
+        "5", ModifiersState::SHIFT, +BindingMode::VI, ~BindingMode::SEARCH; ViMotion::Bracket;
     );
 
     bindings.extend(bindings!(
@@ -800,28 +791,34 @@ fn convert(config_key_binding: ConfigKeyBinding) -> Result<KeyBinding, String> {
 
     let trigger = BindingKey::Keycode { key, location };
 
-    let mut res = ModifiersState::empty();
+    let mut mods = ModifiersState::empty();
     for modifier in config_key_binding.with.split('|') {
         match modifier.trim().to_lowercase().as_str() {
-            "command" | "super" => res.insert(ModifiersState::SUPER),
-            "shift" => res.insert(ModifiersState::SHIFT),
-            "alt" | "option" => res.insert(ModifiersState::ALT),
-            "control" => res.insert(ModifiersState::CONTROL),
+            "command" | "super" => mods.insert(ModifiersState::SUPER),
+            "shift" => mods.insert(ModifiersState::SHIFT),
+            "alt" | "option" => mods.insert(ModifiersState::ALT),
+            "control" | "ctrl" => mods.insert(ModifiersState::CONTROL),
             "none" => (),
             _ => (),
         }
     }
 
-    let mut action: Action = config_key_binding.action.into();
-    if !config_key_binding.text.is_empty() {
-        action = Action::Esc(config_key_binding.text);
-    }
-
-    if !config_key_binding.bytes.is_empty() {
-        if let Ok(str_from_bytes) = std::str::from_utf8(&config_key_binding.bytes) {
-            action = Action::Esc(str_from_bytes.into());
+    let actions = if config_key_binding.bytes.is_empty().not() {
+        vec![Action::Esc(
+            std::str::from_utf8(&config_key_binding.bytes)
+                .map_err(|_| "Unable to convert 'bytes' to utf8".to_string())?
+                .into(),
+        )]
+    } else if config_key_binding.text.is_empty().not() {
+        vec![Action::Esc(config_key_binding.text)]
+    } else {
+        match config_key_binding.action {
+            BindingAction::Single(action) => vec![Action::from(action)],
+            BindingAction::Multiple(items) => {
+                items.into_iter().map(Action::from).collect()
+            }
         }
-    }
+    };
 
     let mut res_mode = ModeWrapper {
         mode: BindingMode::empty(),
@@ -847,8 +844,8 @@ fn convert(config_key_binding: ConfigKeyBinding) -> Result<KeyBinding, String> {
 
     Ok(KeyBinding {
         trigger,
-        mods: res,
-        action,
+        mods,
+        actions,
         mode: res_mode.mode,
         notmode: res_mode.not_mode,
     })
@@ -864,8 +861,8 @@ pub fn config_key_bindings(
 
     for ckb in config_key_bindings {
         match convert(ckb) {
-            Ok(key_binding) => match key_binding.action {
-                Action::None | Action::ReceiveChar => {
+            Ok(key_binding) => match key_binding.actions.as_slice() {
+                &[Action::None] | &[Action::ReceiveChar] => {
                     let mut found_idx = None;
                     for (idx, binding) in bindings.iter().enumerate() {
                         if binding.triggers_match(&key_binding) {
@@ -1121,6 +1118,7 @@ pub fn platform_key_bindings(_: bool, _: bool, _: ConfigKeyboard) -> Vec<KeyBind
 mod tests {
     use super::*;
 
+    use rio_backend::config::bindings::BindingAction;
     use rio_window::keyboard::ModifiersState;
 
     type MockBinding = Binding<usize>;
@@ -1129,7 +1127,7 @@ mod tests {
         fn default() -> Self {
             Self {
                 mods: Default::default(),
-                action: Action::None,
+                actions: vec![Action::None],
                 mode: BindingMode::empty(),
                 notmode: BindingMode::empty(),
                 trigger: Default::default(),
@@ -1150,7 +1148,7 @@ mod tests {
     fn binding_matches_different_action() {
         let binding = MockBinding::default();
         let different_action = MockBinding {
-            action: Action::ClearHistory,
+            actions: vec![Action::ClearHistory],
             ..MockBinding::default()
         };
 
@@ -1381,7 +1379,7 @@ mod tests {
 
         let config_bindings = vec![ConfigKeyBinding {
             key: String::from("q"),
-            action: String::from("receivechar"),
+            action: BindingAction::from("receivechar"),
             with: String::from("super"),
             bytes: vec![],
             text: String::from(""),
@@ -1391,6 +1389,6 @@ mod tests {
         let new_bindings = config_key_bindings(config_bindings, bindings);
 
         assert_eq!(new_bindings.len(), 2);
-        assert_eq!(new_bindings[1].action, Action::ReceiveChar);
+        assert_eq!(new_bindings[1].actions, vec![Action::ReceiveChar]);
     }
 }

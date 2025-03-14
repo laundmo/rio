@@ -6,12 +6,32 @@ use serde::{Deserialize, Serialize};
 // { key = "Home", mods: "super | shift", bytes = [27, 91, 53, 126] }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum BindingAction {
+    Single(String),
+    Multiple(Vec<String>),
+}
+impl Default for BindingAction {
+    fn default() -> Self {
+        Self::Single(String::default())
+    }
+}
+impl<T> From<T> for BindingAction
+where
+    T: ToString,
+{
+    fn from(value: T) -> Self {
+        Self::Single(value.to_string())
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct KeyBinding {
     pub key: String,
     #[serde(default = "String::default")]
     pub with: String,
-    #[serde(default = "String::default")]
-    pub action: String,
+    #[serde(default = "BindingAction::default")]
+    pub action: BindingAction,
     #[serde(default = "String::default")]
     pub text: String,
     #[serde(default = "Vec::default")]
@@ -51,7 +71,7 @@ mod tests {
         let decoded = toml::from_str::<Root>(content).unwrap();
         assert_eq!(decoded.bindings.keys[0].key, "Q");
         assert_eq!(decoded.bindings.keys[0].with.to_owned(), "super");
-        assert_eq!(decoded.bindings.keys[0].action.to_owned(), "quit");
+        assert_eq!(decoded.bindings.keys[0].action.to_owned(), "quit".into());
         assert!(decoded.bindings.keys[0].text.to_owned().is_empty());
     }
 
@@ -82,7 +102,7 @@ mod tests {
         assert_eq!(decoded.bindings.keys[0].key, "Home");
         assert_eq!(decoded.bindings.keys[0].with, "");
         assert_eq!(decoded.bindings.keys[0].mode, "appcursor");
-        assert_eq!(decoded.bindings.keys[0].action.to_owned(), "");
+        assert_eq!(decoded.bindings.keys[0].action.to_owned(), "".into());
         assert!(!decoded.bindings.keys[0].text.to_owned().is_empty());
     }
 
@@ -98,7 +118,7 @@ mod tests {
         let decoded = toml::from_str::<Root>(content).unwrap();
         assert_eq!(decoded.bindings.keys[0].key, "Home");
         assert_eq!(decoded.bindings.keys[0].with, "");
-        assert_eq!(decoded.bindings.keys[0].action.to_owned(), "");
+        assert_eq!(decoded.bindings.keys[0].action.to_owned(), "".into());
         assert!(decoded.bindings.keys[0].text.to_owned().is_empty());
         let binding = decoded.bindings.keys[0].bytes.to_owned();
         assert_eq!(std::str::from_utf8(&binding).unwrap(), "\x1bOH".to_string());
@@ -123,14 +143,14 @@ mod tests {
 
         assert_eq!(decoded.bindings.keys[0].key, "Q");
         assert_eq!(decoded.bindings.keys[0].with, "super");
-        assert_eq!(decoded.bindings.keys[0].action.to_owned(), "quit");
+        assert_eq!(decoded.bindings.keys[0].action.to_owned(), "quit".into());
         assert!(decoded.bindings.keys[0].text.to_owned().is_empty());
 
         assert_eq!(decoded.bindings.keys[1].key, "+");
         assert_eq!(decoded.bindings.keys[1].with, "super");
         assert_eq!(
             decoded.bindings.keys[1].action.to_owned(),
-            "increasefontsize"
+            "increasefontsize".into()
         );
         assert!(decoded.bindings.keys[1].text.to_owned().is_empty());
 
@@ -138,23 +158,32 @@ mod tests {
         assert_eq!(decoded.bindings.keys[2].with, "super");
         assert_eq!(
             decoded.bindings.keys[2].action.to_owned(),
-            "decreasefontsize"
+            "decreasefontsize".into()
         );
         assert!(decoded.bindings.keys[2].text.to_owned().is_empty());
 
         assert_eq!(decoded.bindings.keys[3].key, "0");
         assert_eq!(decoded.bindings.keys[3].with, "super");
-        assert_eq!(decoded.bindings.keys[3].action.to_owned(), "resetfontsize");
+        assert_eq!(
+            decoded.bindings.keys[3].action.to_owned(),
+            "resetfontsize".into()
+        );
         assert!(decoded.bindings.keys[3].text.to_owned().is_empty());
 
         assert_eq!(decoded.bindings.keys[4].key, "[");
         assert_eq!(decoded.bindings.keys[4].with, "super | shift");
-        assert_eq!(decoded.bindings.keys[4].action.to_owned(), "selectnexttab");
+        assert_eq!(
+            decoded.bindings.keys[4].action.to_owned(),
+            "selectnexttab".into()
+        );
         assert!(decoded.bindings.keys[4].text.to_owned().is_empty());
 
         assert_eq!(decoded.bindings.keys[5].key, "]");
         assert_eq!(decoded.bindings.keys[5].with, "super | shift");
-        assert_eq!(decoded.bindings.keys[5].action.to_owned(), "selectprevtab");
+        assert_eq!(
+            decoded.bindings.keys[5].action.to_owned(),
+            "selectprevtab".into()
+        );
         assert!(decoded.bindings.keys[5].text.to_owned().is_empty());
     }
 }

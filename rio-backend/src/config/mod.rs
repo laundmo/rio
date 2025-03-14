@@ -782,7 +782,7 @@ mod tests {
         // Bindings
         assert_eq!(result.bindings.keys[0].key, "Q");
         assert_eq!(result.bindings.keys[0].with, "super");
-        assert_eq!(result.bindings.keys[0].action.to_owned(), "Quit");
+        assert_eq!(result.bindings.keys[0].action.to_owned(), "Quit".into());
         assert!(result.bindings.keys[0].text.to_owned().is_empty());
     }
 

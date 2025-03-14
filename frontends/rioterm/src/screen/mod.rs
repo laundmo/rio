@@ -658,7 +658,7 @@ impl Screen<'_> {
             }
 
             if binding.is_triggered_by(binding_mode.to_owned(), mods, &button)
-                && binding.action == Act::PasteSelection
+                && binding.actions == [Act::PasteSelection]
             {
                 let content = self.clipboard.borrow_mut().get(ClipboardType::Selection);
                 self.paste(&content, true);
@@ -712,337 +712,348 @@ impl Screen<'_> {
             };
 
             if binding.is_triggered_by(binding_mode.to_owned(), mods, &key_match) {
-                *ignore_chars.get_or_insert(true) &= binding.action != Act::ReceiveChar;
+                for bi in 0..binding.actions.len() {
+                    // hey, rust, nobody is mutating self.bindings or binding.actions, its fine
+                    let action = &self.bindings[i].actions[bi];
 
-                match &binding.action {
-                    Act::Run(program) => self.exec(program.program(), program.args()),
-                    Act::Esc(s) => {
-                        let current_context = self.context_manager.current_mut();
-                        current_context.set_selection(None);
-                        let mut terminal = current_context.terminal.lock();
-                        terminal.selection.take();
-                        terminal.scroll_display(Scroll::Bottom);
-                        drop(terminal);
-                        current_context
-                            .messenger
-                            .send_bytes(s.to_owned().into_bytes());
-                    }
-                    Act::Paste => {
-                        let content =
-                            self.clipboard.borrow_mut().get(ClipboardType::Clipboard);
-                        self.paste(&content, true);
-                    }
-                    Act::ClearSelection => {
-                        self.clear_selection();
-                    }
-                    Act::PasteSelection => {
-                        let content =
-                            self.clipboard.borrow_mut().get(ClipboardType::Selection);
-                        self.paste(&content, true);
-                    }
-                    Act::Copy => {
-                        self.copy_selection(ClipboardType::Clipboard);
-                    }
-                    Act::SearchForward => {
-                        self.start_search(Direction::Right);
-                        self.resize_top_or_bottom_line(self.ctx().len());
-                        self.render();
-                    }
-                    Act::SearchBackward => {
-                        self.start_search(Direction::Left);
-                        self.resize_top_or_bottom_line(self.ctx().len());
-                        self.render();
-                    }
-                    Act::Search(SearchAction::SearchConfirm) => {
-                        self.confirm_search();
-                        self.resize_top_or_bottom_line(self.ctx().len());
-                        self.render();
-                    }
-                    Act::Search(SearchAction::SearchCancel) => {
-                        self.cancel_search();
-                        self.resize_top_or_bottom_line(self.ctx().len());
-                        self.render();
-                    }
-                    Act::Search(SearchAction::SearchClear) => {
-                        let direction = self.search_state.direction;
-                        self.cancel_search();
-                        self.start_search(direction);
-                        self.resize_top_or_bottom_line(self.ctx().len());
-                        self.render();
-                    }
-                    Act::Search(SearchAction::SearchFocusNext) => {
-                        self.advance_search_origin(self.search_state.direction);
-                        self.resize_top_or_bottom_line(self.ctx().len());
-                        self.render();
-                    }
-                    Act::Search(SearchAction::SearchFocusPrevious) => {
-                        let direction = self.search_state.direction.opposite();
-                        self.advance_search_origin(direction);
-                        self.resize_top_or_bottom_line(self.ctx().len());
-                        self.render();
-                    }
-                    Act::Search(SearchAction::SearchDeleteWord) => {
-                        self.search_pop_word();
-                        self.render();
-                    }
-                    Act::Search(SearchAction::SearchHistoryPrevious) => {
-                        self.search_history_previous();
-                        self.render();
-                    }
-                    Act::Search(SearchAction::SearchHistoryNext) => {
-                        self.search_history_next();
-                        self.render();
-                    }
-                    Act::ToggleViMode => {
-                        let mut terminal =
-                            self.context_manager.current_mut().terminal.lock();
-                        terminal.toggle_vi_mode();
-                        let has_vi_mode_enabled = terminal.mode().contains(Mode::VI);
-                        drop(terminal);
-                        self.renderer.set_vi_mode(has_vi_mode_enabled);
-                        self.render();
-                    }
-                    Act::ViMotion(motion) => {
-                        let current_context = self.context_manager.current_mut();
-                        let mut terminal = current_context.terminal.lock();
-                        if terminal.mode().contains(Mode::VI) {
-                            terminal.vi_motion(*motion);
+                    // ReceiveChar is used to overwrite pre-set bindings and allow their characters
+                    *ignore_chars.get_or_insert(true) &= action != &Act::ReceiveChar;
+                    dbg!(action);
+
+                    match action {
+                        Act::Run(program) => self.exec(program.program(), program.args()),
+                        Act::Esc(s) => {
+                            let current_context = self.context_manager.current_mut();
+                            current_context.set_selection(None);
+                            let mut terminal = current_context.terminal.lock();
+                            terminal.selection.take();
+                            terminal.scroll_display(Scroll::Bottom);
+                            drop(terminal);
+                            current_context
+                                .messenger
+                                .send_bytes(s.to_owned().into_bytes());
                         }
-
-                        if let Some(selection) = &terminal.selection {
-                            current_context.renderable_content.selection_range =
-                                selection.to_range(&terminal);
-                        };
-                        drop(terminal);
-                        self.render();
-                    }
-                    Act::Vi(ViAction::CenterAroundViCursor) => {
-                        let mut terminal =
-                            self.context_manager.current_mut().terminal.lock();
-                        let display_offset = terminal.display_offset() as i32;
-                        let target =
-                            -display_offset + terminal.grid.screen_lines() as i32 / 2 - 1;
-                        let line = terminal.vi_mode_cursor.pos.row;
-                        let scroll_lines = target - line.0;
-
-                        terminal.scroll_display(Scroll::Delta(scroll_lines));
-                        drop(terminal);
-                    }
-                    Act::Vi(ViAction::ToggleNormalSelection) => {
-                        self.toggle_selection(SelectionType::Simple, Side::Left);
-                        self.render();
-                    }
-                    Act::Vi(ViAction::ToggleLineSelection) => {
-                        self.toggle_selection(SelectionType::Lines, Side::Left);
-                        self.render();
-                    }
-                    Act::Vi(ViAction::ToggleBlockSelection) => {
-                        self.toggle_selection(SelectionType::Block, Side::Left);
-                        self.render();
-                    }
-                    Act::Vi(ViAction::ToggleSemanticSelection) => {
-                        self.toggle_selection(SelectionType::Semantic, Side::Left);
-                        self.render();
-                    }
-                    Act::SplitRight => {
-                        self.split_right();
-                    }
-                    Act::SplitDown => {
-                        self.split_down();
-                    }
-                    Act::ConfigEditor => {
-                        self.context_manager.switch_to_settings();
-                    }
-                    Act::WindowCreateNew => {
-                        self.context_manager.create_new_window();
-                    }
-                    Act::CloseCurrentSplitOrTab => {
-                        self.close_split_or_tab();
-                    }
-                    Act::TabCreateNew => {
-                        self.create_tab();
-                    }
-                    Act::TabCloseCurrent => {
-                        self.close_tab();
-                    }
-                    Act::TabCloseUnfocused => {
-                        self.clear_selection();
-                        self.cancel_search();
-                        if self.ctx().len() <= 1 {
-                            return true;
+                        Act::Paste => {
+                            let content =
+                                self.clipboard.borrow_mut().get(ClipboardType::Clipboard);
+                            self.paste(&content, true);
                         }
-                        self.context_manager.close_unfocused_tabs();
-                        self.resize_top_or_bottom_line(1);
-                        self.render();
-                    }
-                    Act::Quit => {
-                        self.context_manager.quit();
-                    }
-                    Act::IncreaseFontSize => {
-                        self.change_font_size(FontSizeAction::Increase);
-                    }
-                    Act::DecreaseFontSize => {
-                        self.change_font_size(FontSizeAction::Decrease);
-                    }
-                    Act::ResetFontSize => {
-                        self.change_font_size(FontSizeAction::Reset);
-                    }
-                    Act::ScrollPageUp => {
-                        // Move vi mode cursor.
-                        let mut terminal =
-                            self.context_manager.current_mut().terminal.lock();
-                        let scroll_lines = terminal.grid.screen_lines() as i32;
-                        terminal.vi_mode_cursor =
-                            terminal.vi_mode_cursor.scroll(&terminal, scroll_lines);
-                        terminal.scroll_display(Scroll::PageUp);
-                        drop(terminal);
-                        self.render();
-                    }
-                    Act::ScrollPageDown => {
-                        // Move vi mode cursor.
-                        let mut terminal =
-                            self.context_manager.current_mut().terminal.lock();
-                        let scroll_lines = -(terminal.grid.screen_lines() as i32);
+                        Act::ClearSelection => {
+                            self.clear_selection();
+                        }
+                        Act::PasteSelection => {
+                            let content =
+                                self.clipboard.borrow_mut().get(ClipboardType::Selection);
+                            self.paste(&content, true);
+                        }
+                        Act::Copy => {
+                            self.copy_selection(ClipboardType::Clipboard);
+                        }
+                        Act::SearchForward => {
+                            self.start_search(Direction::Right);
+                            self.resize_top_or_bottom_line(self.ctx().len());
+                            self.render();
+                        }
+                        Act::SearchBackward => {
+                            self.start_search(Direction::Left);
+                            self.resize_top_or_bottom_line(self.ctx().len());
+                            self.render();
+                        }
+                        Act::Search(SearchAction::SearchConfirm) => {
+                            self.confirm_search();
+                            self.resize_top_or_bottom_line(self.ctx().len());
+                            self.render();
+                        }
+                        Act::Search(SearchAction::SearchCancel) => {
+                            self.cancel_search();
+                            self.resize_top_or_bottom_line(self.ctx().len());
+                            self.render();
+                        }
+                        Act::Search(SearchAction::SearchClear) => {
+                            let direction = self.search_state.direction;
+                            self.cancel_search();
+                            self.start_search(direction);
+                            self.resize_top_or_bottom_line(self.ctx().len());
+                            self.render();
+                        }
+                        Act::Search(SearchAction::SearchFocusNext) => {
+                            self.advance_search_origin(self.search_state.direction);
+                            self.resize_top_or_bottom_line(self.ctx().len());
+                            self.render();
+                        }
+                        Act::Search(SearchAction::SearchFocusPrevious) => {
+                            let direction = self.search_state.direction.opposite();
+                            self.advance_search_origin(direction);
+                            self.resize_top_or_bottom_line(self.ctx().len());
+                            self.render();
+                        }
+                        Act::Search(SearchAction::SearchDeleteWord) => {
+                            self.search_pop_word();
+                            self.render();
+                        }
+                        Act::Search(SearchAction::SearchHistoryPrevious) => {
+                            self.search_history_previous();
+                            self.render();
+                        }
+                        Act::Search(SearchAction::SearchHistoryNext) => {
+                            self.search_history_next();
+                            self.render();
+                        }
+                        Act::ToggleViMode => {
+                            let mut terminal =
+                                self.context_manager.current_mut().terminal.lock();
+                            terminal.toggle_vi_mode();
+                            let has_vi_mode_enabled = terminal.mode().contains(Mode::VI);
+                            drop(terminal);
+                            self.renderer.set_vi_mode(has_vi_mode_enabled);
+                            self.render();
+                        }
+                        Act::ViMotion(motion) => {
+                            let current_context = self.context_manager.current_mut();
+                            let mut terminal = current_context.terminal.lock();
+                            if terminal.mode().contains(Mode::VI) {
+                                terminal.vi_motion(*motion);
+                            }
 
-                        terminal.vi_mode_cursor =
-                            terminal.vi_mode_cursor.scroll(&terminal, scroll_lines);
+                            if let Some(selection) = &terminal.selection {
+                                current_context.renderable_content.selection_range =
+                                    selection.to_range(&terminal);
+                            };
+                            drop(terminal);
+                            self.render();
+                        }
+                        Act::Vi(ViAction::CenterAroundViCursor) => {
+                            let mut terminal =
+                                self.context_manager.current_mut().terminal.lock();
+                            let display_offset = terminal.display_offset() as i32;
+                            let target = -display_offset
+                                + terminal.grid.screen_lines() as i32 / 2
+                                - 1;
+                            let line = terminal.vi_mode_cursor.pos.row;
+                            let scroll_lines = target - line.0;
 
-                        terminal.scroll_display(Scroll::PageDown);
-                        drop(terminal);
-                        self.render();
-                    }
-                    Act::ScrollHalfPageUp => {
-                        // Move vi mode cursor.
-                        let mut terminal =
-                            self.context_manager.current_mut().terminal.lock();
-                        let scroll_lines = terminal.grid.screen_lines() as i32 / 2;
+                            terminal.scroll_display(Scroll::Delta(scroll_lines));
+                            drop(terminal);
+                        }
+                        Act::Vi(ViAction::ToggleNormalSelection) => {
+                            self.toggle_selection(SelectionType::Simple, Side::Left);
+                            self.render();
+                        }
+                        Act::Vi(ViAction::ToggleLineSelection) => {
+                            self.toggle_selection(SelectionType::Lines, Side::Left);
+                            self.render();
+                        }
+                        Act::Vi(ViAction::ToggleBlockSelection) => {
+                            self.toggle_selection(SelectionType::Block, Side::Left);
+                            self.render();
+                        }
+                        Act::Vi(ViAction::ToggleSemanticSelection) => {
+                            self.toggle_selection(SelectionType::Semantic, Side::Left);
+                            self.render();
+                        }
+                        Act::SplitRight => {
+                            self.split_right();
+                        }
+                        Act::SplitDown => {
+                            self.split_down();
+                        }
+                        Act::ConfigEditor => {
+                            self.context_manager.switch_to_settings();
+                        }
+                        Act::WindowCreateNew => {
+                            self.context_manager.create_new_window();
+                        }
+                        Act::CloseCurrentSplitOrTab => {
+                            self.close_split_or_tab();
+                        }
+                        Act::TabCreateNew => {
+                            self.create_tab();
+                        }
+                        Act::TabCloseCurrent => {
+                            self.close_tab();
+                        }
+                        Act::TabCloseUnfocused => {
+                            self.clear_selection();
+                            self.cancel_search();
+                            if self.ctx().len() <= 1 {
+                                return true;
+                            }
+                            self.context_manager.close_unfocused_tabs();
+                            self.resize_top_or_bottom_line(1);
+                            self.render();
+                        }
+                        Act::Quit => {
+                            self.context_manager.quit();
+                        }
+                        Act::IncreaseFontSize => {
+                            self.change_font_size(FontSizeAction::Increase);
+                        }
+                        Act::DecreaseFontSize => {
+                            self.change_font_size(FontSizeAction::Decrease);
+                        }
+                        Act::ResetFontSize => {
+                            self.change_font_size(FontSizeAction::Reset);
+                        }
+                        Act::ScrollPageUp => {
+                            // Move vi mode cursor.
+                            let mut terminal =
+                                self.context_manager.current_mut().terminal.lock();
+                            let scroll_lines = terminal.grid.screen_lines() as i32;
+                            terminal.vi_mode_cursor =
+                                terminal.vi_mode_cursor.scroll(&terminal, scroll_lines);
+                            terminal.scroll_display(Scroll::PageUp);
+                            drop(terminal);
+                            self.render();
+                        }
+                        Act::ScrollPageDown => {
+                            // Move vi mode cursor.
+                            let mut terminal =
+                                self.context_manager.current_mut().terminal.lock();
+                            let scroll_lines = -(terminal.grid.screen_lines() as i32);
 
-                        terminal.vi_mode_cursor =
-                            terminal.vi_mode_cursor.scroll(&terminal, scroll_lines);
+                            terminal.vi_mode_cursor =
+                                terminal.vi_mode_cursor.scroll(&terminal, scroll_lines);
 
-                        terminal.scroll_display(Scroll::Delta(scroll_lines));
-                        drop(terminal);
-                        self.render();
-                    }
-                    Act::ScrollHalfPageDown => {
-                        // Move vi mode cursor.
-                        let mut terminal =
-                            self.context_manager.current_mut().terminal.lock();
-                        let scroll_lines = -(terminal.grid.screen_lines() as i32 / 2);
+                            terminal.scroll_display(Scroll::PageDown);
+                            drop(terminal);
+                            self.render();
+                        }
+                        Act::ScrollHalfPageUp => {
+                            // Move vi mode cursor.
+                            let mut terminal =
+                                self.context_manager.current_mut().terminal.lock();
+                            let scroll_lines = terminal.grid.screen_lines() as i32 / 2;
 
-                        terminal.vi_mode_cursor =
-                            terminal.vi_mode_cursor.scroll(&terminal, scroll_lines);
+                            terminal.vi_mode_cursor =
+                                terminal.vi_mode_cursor.scroll(&terminal, scroll_lines);
 
-                        terminal.scroll_display(Scroll::Delta(scroll_lines));
-                        drop(terminal);
-                        self.render();
-                    }
-                    Act::ScrollToTop => {
-                        let mut terminal =
-                            self.context_manager.current_mut().terminal.lock();
-                        terminal.scroll_display(Scroll::Top);
+                            terminal.scroll_display(Scroll::Delta(scroll_lines));
+                            drop(terminal);
+                            self.render();
+                        }
+                        Act::ScrollHalfPageDown => {
+                            // Move vi mode cursor.
+                            let mut terminal =
+                                self.context_manager.current_mut().terminal.lock();
+                            let scroll_lines = -(terminal.grid.screen_lines() as i32 / 2);
 
-                        let topmost_line = terminal.grid.topmost_line();
-                        terminal.vi_mode_cursor.pos.row = topmost_line;
-                        terminal.vi_motion(ViMotion::FirstOccupied);
-                        drop(terminal);
-                        self.render();
-                    }
-                    Act::ScrollToBottom => {
-                        let mut terminal =
-                            self.context_manager.current_mut().terminal.lock();
-                        terminal.scroll_display(Scroll::Bottom);
+                            terminal.vi_mode_cursor =
+                                terminal.vi_mode_cursor.scroll(&terminal, scroll_lines);
 
-                        // Move vi mode cursor.
-                        terminal.vi_mode_cursor.pos.row = terminal.grid.bottommost_line();
+                            terminal.scroll_display(Scroll::Delta(scroll_lines));
+                            drop(terminal);
+                            self.render();
+                        }
+                        Act::ScrollToTop => {
+                            let mut terminal =
+                                self.context_manager.current_mut().terminal.lock();
+                            terminal.scroll_display(Scroll::Top);
 
-                        // Move to beginning twice, to always jump across linewraps.
-                        terminal.vi_motion(ViMotion::FirstOccupied);
-                        terminal.vi_motion(ViMotion::FirstOccupied);
-                        drop(terminal);
-                        self.render();
+                            let topmost_line = terminal.grid.topmost_line();
+                            terminal.vi_mode_cursor.pos.row = topmost_line;
+                            terminal.vi_motion(ViMotion::FirstOccupied);
+                            drop(terminal);
+                            self.render();
+                        }
+                        Act::ScrollToBottom => {
+                            let mut terminal =
+                                self.context_manager.current_mut().terminal.lock();
+                            terminal.scroll_display(Scroll::Bottom);
+
+                            // Move vi mode cursor.
+                            terminal.vi_mode_cursor.pos.row =
+                                terminal.grid.bottommost_line();
+
+                            // Move to beginning twice, to always jump across linewraps.
+                            terminal.vi_motion(ViMotion::FirstOccupied);
+                            terminal.vi_motion(ViMotion::FirstOccupied);
+                            drop(terminal);
+                            self.render();
+                        }
+                        Act::Scroll(delta) => {
+                            let mut terminal =
+                                self.context_manager.current_mut().terminal.lock();
+                            terminal.scroll_display(Scroll::Delta(*delta));
+                            drop(terminal);
+                            self.render();
+                        }
+                        Act::ClearHistory => {
+                            let mut terminal =
+                                self.context_manager.current_mut().terminal.lock();
+                            terminal.clear_saved_history();
+                            drop(terminal);
+                            self.render();
+                        }
+                        Act::ToggleFullscreen => {
+                            self.context_manager.toggle_full_screen()
+                        }
+                        Act::Minimize => {
+                            self.context_manager.minimize();
+                        }
+                        Act::Hide => {
+                            self.context_manager.hide();
+                        }
+                        #[cfg(target_os = "macos")]
+                        Act::HideOtherApplications => {
+                            self.context_manager.hide_other_apps();
+                        }
+                        Act::SelectNextSplit => {
+                            self.cancel_search();
+                            self.context_manager.select_next_split();
+                            self.render();
+                        }
+                        Act::SelectPrevSplit => {
+                            self.cancel_search();
+                            self.context_manager.select_prev_split();
+                            self.render();
+                        }
+                        Act::SelectNextSplitOrTab => {
+                            self.cancel_search();
+                            self.context_manager.switch_to_next_split_or_tab();
+                            self.render();
+                        }
+                        Act::SelectPrevSplitOrTab => {
+                            self.cancel_search();
+                            self.context_manager.switch_to_prev_split_or_tab();
+                            self.render();
+                        }
+                        Act::SelectTab(tab_index) => {
+                            self.context_manager.select_tab(*tab_index);
+                            self.cancel_search();
+                            self.render();
+                        }
+                        Act::SelectLastTab => {
+                            self.cancel_search();
+                            self.context_manager.select_last_tab();
+                            self.render();
+                        }
+                        Act::SelectNextTab => {
+                            self.cancel_search();
+                            self.clear_selection();
+                            self.context_manager.switch_to_next();
+                            self.render();
+                        }
+                        Act::MoveCurrentTabToPrev => {
+                            self.cancel_search();
+                            self.clear_selection();
+                            self.context_manager.move_current_to_prev();
+                            self.render();
+                        }
+                        Act::MoveCurrentTabToNext => {
+                            self.cancel_search();
+                            self.clear_selection();
+                            self.context_manager.move_current_to_next();
+                            self.render();
+                        }
+                        Act::SelectPrevTab => {
+                            self.cancel_search();
+                            self.clear_selection();
+                            self.context_manager.switch_to_prev();
+                            self.render();
+                        }
+                        Act::ReceiveChar | Act::None => (),
+                        _ => (),
                     }
-                    Act::Scroll(delta) => {
-                        let mut terminal =
-                            self.context_manager.current_mut().terminal.lock();
-                        terminal.scroll_display(Scroll::Delta(*delta));
-                        drop(terminal);
-                        self.render();
-                    }
-                    Act::ClearHistory => {
-                        let mut terminal =
-                            self.context_manager.current_mut().terminal.lock();
-                        terminal.clear_saved_history();
-                        drop(terminal);
-                        self.render();
-                    }
-                    Act::ToggleFullscreen => self.context_manager.toggle_full_screen(),
-                    Act::Minimize => {
-                        self.context_manager.minimize();
-                    }
-                    Act::Hide => {
-                        self.context_manager.hide();
-                    }
-                    #[cfg(target_os = "macos")]
-                    Act::HideOtherApplications => {
-                        self.context_manager.hide_other_apps();
-                    }
-                    Act::SelectNextSplit => {
-                        self.cancel_search();
-                        self.context_manager.select_next_split();
-                        self.render();
-                    }
-                    Act::SelectPrevSplit => {
-                        self.cancel_search();
-                        self.context_manager.select_prev_split();
-                        self.render();
-                    }
-                    Act::SelectNextSplitOrTab => {
-                        self.cancel_search();
-                        self.context_manager.switch_to_next_split_or_tab();
-                        self.render();
-                    }
-                    Act::SelectPrevSplitOrTab => {
-                        self.cancel_search();
-                        self.context_manager.switch_to_prev_split_or_tab();
-                        self.render();
-                    }
-                    Act::SelectTab(tab_index) => {
-                        self.context_manager.select_tab(*tab_index);
-                        self.cancel_search();
-                        self.render();
-                    }
-                    Act::SelectLastTab => {
-                        self.cancel_search();
-                        self.context_manager.select_last_tab();
-                        self.render();
-                    }
-                    Act::SelectNextTab => {
-                        self.cancel_search();
-                        self.clear_selection();
-                        self.context_manager.switch_to_next();
-                        self.render();
-                    }
-                    Act::MoveCurrentTabToPrev => {
-                        self.cancel_search();
-                        self.clear_selection();
-                        self.context_manager.move_current_to_prev();
-                        self.render();
-                    }
-                    Act::MoveCurrentTabToNext => {
-                        self.cancel_search();
-                        self.clear_selection();
-                        self.context_manager.move_current_to_next();
-                        self.render();
-                    }
-                    Act::SelectPrevTab => {
-                        self.cancel_search();
-                        self.clear_selection();
-                        self.context_manager.switch_to_prev();
-                        self.render();
-                    }
-                    Act::ReceiveChar | Act::None => (),
-                    _ => (),
                 }
             }
         }
