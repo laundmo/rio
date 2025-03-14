@@ -56,73 +56,74 @@ Execute a predefined action in Rio terminal.
 
 | Action           | Description                                                                   |
 | :--------------- | :---------------------------------------------------------------------------- |
-| None             | |
-| ReceiveChar      | |
-| ToggleVIMode     | |
-| Paste            | Paste command |
-| Copy             | Copy command |
-| OpenConfigEditor | Open configuration file on configured editor property |
-| ResetFontSize    | |
-| IncreaseFontSize | |
-| DecreaseFontSize | |
+| None             | see [Overwriting](#overwriting)                                               |
+| ReceiveChar      | see [Overwriting](#overwriting)                                               |
+| ToggleVIMode     | Toggles Vi mode on or off                                                     |
+| Paste            | Paste command                                                                 |
+| Copy             | Copy command                                                                  |
+| OpenConfigEditor | Open configuration file on configured editor property                         |
+| ResetFontSize    | Reset font size to the config value                                           |
+| IncreaseFontSize | Increase font size                                                            |
+| DecreaseFontSize | Decrease font size                                                            |
 | Run(string)      | Example: Running command `Run(code)` or `Run(code ~/.config/rio/config.toml)` |
-| PasteSelection   | |
-| ClearSelection   | |
-| CreateWindow     | Create a Rio window instance |
-| Quit             | Exit Rio |
-| ToggleFullscreen | Toggle fullscreen |
+| PasteSelection   | Paste the Selection clipboard if available, otherwise Paste                   |
+| ClearSelection   | Clear the current selection                                                   |
+| CreateWindow     | Create a Rio window instance                                                  |
+| Quit             | Exit Rio                                                                      |
+| ToggleFullscreen | Toggle fullscreen                                                             |
 
 ### [Split Actions](#split-actions)
 
-| Action               | Description                                                                |
-| :------------------- | :------------------------------------------------------------------------- |
-| SplitRight           | Create a split by right side |
-| SplitDown            | Create a split by under current pane |
-| SelectNextSplit      | Select next split |
-| SelectPrevSplit      | Select previous split |
+| Action               | Description                                               |
+| :------------------- | :-------------------------------------------------------- |
+| SplitRight           | Create a split by right side                              |
+| SplitDown            | Create a split by under current pane                      |
+| SelectNextSplit      | Select next split                                         |
+| SelectPrevSplit      | Select previous split                                     |
 | CloseSplitOrTab      | Close split, if split is the last then will close the tab |
-| SelectNextSplitOrTab | Select next split if available if not next tab |
-| SelectPrevSplitOrTab | Select previous split if available if not previous tab |
+| SelectNextSplitOrTab | Select next split if available if not next tab            |
+| SelectPrevSplitOrTab | Select previous split if available if not previous tab    |
 
 ### [Tab Actions](#tab-actions)
 
-| Action               | Description                                                             |
-| :------------------- | :---------------------------------------------------------------------- |
-| CreateTab            | Create new tab                                                          |
-| CloseTab             | Close current tab                                                       |
-| CloseUnfocusedTabs   | Close all tabs that are not currently focused                           |
-| SelectNextTab        | Select next tab                                                         |
-| SelectPrevTab        | Select pervious tab                                                     |
-| SelectLastTab        | Select last tab                                                         |
-| MoveCurrentTabToNext | Move the current focused tab to the next slot, or first when last       |
-| MoveCurrentTabToPrev | Move the current focused tab to the previous slot, or last when first   |
-| SelectTab(tab_index) | Example: Select first tab `SelectTab(0)`, second tab `SelectTab(1)`     |
+| Action               | Description                                                           |
+| :------------------- | :-------------------------------------------------------------------- |
+| CreateTab            | Create new tab                                                        |
+| CloseTab             | Close current tab                                                     |
+| CloseUnfocusedTabs   | Close all tabs that are not currently focused                         |
+| SelectNextTab        | Select next tab                                                       |
+| SelectPrevTab        | Select pervious tab                                                   |
+| SelectLastTab        | Select last tab                                                       |
+| MoveCurrentTabToNext | Move the current focused tab to the next slot, or first when last     |
+| MoveCurrentTabToPrev | Move the current focused tab to the previous slot, or last when first |
+| SelectTab(tab_index) | Example: Select first tab `SelectTab(0)`, second tab `SelectTab(1)`   |
 
 ### [Scroll Actions](#scroll-actions)
 
 | Action             | Description                                                                |
 | :----------------- | :------------------------------------------------------------------------- |
 | Scroll(int)        | Example: Scroll up 8 lines `Scroll(8)` or scroll down 5 lines `Scroll(-5)` |
-| ScrollPageUp       |                                                                            |
-| ScrollPageDown     |                                                                            |
-| ScrollHalfPageUp   |                                                                            |
-| ScrollHalfPageDown |                                                                            |
-| ScrollToTop        |                                                                            |
-| ScrollToBottom     |                                                                            |
+| ScrollPageUp       | Scroll up an entire page                                                   |
+| ScrollPageDown     | Scroll down an entire page                                                 |
+| ScrollHalfPageUp   | Scroll up half a page                                                      |
+| ScrollHalfPageDown | Scroll down half a page                                                    |
+| ScrollToTop        | Scroll all the way to the top                                              |
+| ScrollToBottom     | Scroll all the way to the bottom                                           |
 
 ### [Search Actions](#search-actions)
 
-| Action             | Description                                                                |
-| :----------------- | :------------------------------------------------------------------------- |
-| SearchForward      |  |
-| SearchBackward     |  |
-| SearchConfirm      |  |
-| SearchClear        |  |
-| SearchFocusNext    |  |
-| SearchFocusPrevious  | |
-| SearchDeleteWord     | |
-| SearchHistoryNext     | |
-| SearchHistoryPrevious | |
+| Action                | Description                                    |
+| :-------------------- | :--------------------------------------------- |
+| SearchForward         | Start a forward buffer search                  |
+| SearchBackward        | tart a backward buffer search                  |
+| SearchConfirm         | Confirm the active search                      |
+| SearchClear           | Reset the search regex                         |
+| SearchClear           | Cancel the active search                       |
+| SearchFocusNext       | Move the focus to the next search match        |
+| SearchFocusPrevious   | Move the focus to the previous search match    |
+| SearchDeleteWord      | Delete the last word in the search regex       |
+| SearchHistoryNext     | Go to the next regex in the search history     |
+| SearchHistoryPrevious | Go to the previous regex in the search history |
 
 ## [Bytes](#bytes)
 
